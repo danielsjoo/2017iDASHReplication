@@ -1,10 +1,17 @@
 # 2017iDASHReplication
 
-A program that trains a logistic model using Homomorphic encryption.
-Testing the model is not homomorphic.
+A program that trains a logistic model using Homomorphic encryption from the following paper:
+https://bmcmedgenomics.biomedcentral.com/track/pdf/10.1186/s12920-018-0401-7.pdf
 
-Directions to run (from this directory)
+Requirements to run:
+    1. clone this repository
+    2. install the SEAL library
+    3. (for now): edit SEAL hestdparms.h line 24 so that it returns 1000.
+
+Directions to run (from root directory)
+    mkdir build
     cd build
+    cmake -S .. -B .
     make
     heTraining filename.txt
 
@@ -20,3 +27,8 @@ Output:
     - final performance of model with test set + test set size
     - graph indicating convergence with test set and training set
         - performance vs epoch
+        
+CURRENT STATUS
+    - Training implementation is not finished. HE multiplication with plaintext not understood
+    - Data tool to test for convergence not written
+
