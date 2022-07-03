@@ -4,6 +4,7 @@ using namespace seal;
 
 void printresult(vector<double>);
 void print_result_full(vector<double>);
+void printrow(vector<double>, int);
 
 int main(int argc, char *argv[]){
 
@@ -23,15 +24,15 @@ int main(int argc, char *argv[]){
     /* 
     SETUP FOR CKKS ENCRYPTION:
         poly_modulus_degree   : 2^15 = 1024
-        coeffModulus bit sizes: {50,30,30,30,30,30,30,50} level 7
+        coeffModulus bit sizes: {50,30,30,30,30,30,30,30,50}
         scale                 : pow(2.0,30)
     */
     #pragma region
     EncryptionParameters parms(scheme_type::ckks);
 
-    size_t poly_modulus_degree = 1024;
+    size_t poly_modulus_degree = 1024; //purposely broke
     parms.set_poly_modulus_degree(poly_modulus_degree);
-    parms.set_coeff_modulus(CoeffModulus::Create(poly_modulus_degree, {50,30,30,30,30,30,30,50}));
+    parms.set_coeff_modulus(CoeffModulus::Create(poly_modulus_degree, {50,30,30,30,30,30,30,30,50}));
 
     SEALContext context(parms);
 
@@ -61,8 +62,7 @@ int main(int argc, char *argv[]){
     cout << "done\n" << endl; 
     #pragma endregion
 
-    /* OPERATIONS BELOW */
-
+    /* SETUP FOR TRAINING LOOP */
     #pragma region SETUP
     cout << "0. BEFORE ANY CALCULATION" << endl;
     cout << "the first three rows of the data (ctz)" << endl;
@@ -85,14 +85,17 @@ int main(int argc, char *argv[]){
     Plaintext temp_plaintext; // for printing intermediate results
     vector<double> temp_vector;
     #pragma endregion
-    
-    int epochs = 1;
-    double learning_rate = 0.1;
 
+    /* TRAINING LOOP */
+    int epochs = 4;
+    double learning_rate = 10;
     for (int i=0; i<epochs; i++){
+
+        cout << "__________________" << "EPOCH " << i+1 << "__________________\n" << endl;
     
         //step 1
-        evaluator.multiply(ctz, ct0, ct1);
+        evaluator.mod_switch_to(ctz, ct0.parms_id(), t1);
+        evaluator.multiply(t1, ct0, ct1);
         evaluator.relinearize_inplace(ct1, relin_keys);
         evaluator.rescale_to_next_inplace(ct1);
         decryptor.decrypt(ct1, temp_plaintext); //now level 6
@@ -114,27 +117,10 @@ int main(int argc, char *argv[]){
 
         //step 3
         encoder.encode(data_package.annihilation, scale, temp_plaintext);
-        encryptor.encrypt(temp_plaintext, t1);
-        evaluator.square_inplace(t1);
-        evaluator.relinearize_inplace(t1, relin_keys);
-        evaluator.rescale_to_next_inplace(t1);
-        evaluator.multiply_inplace(ct1, t1);
-        evaluator.relinearize_inplace(ct1,relin_keys); //now level 5
-        evaluator.rescale_to_next_inplace(ct1);
-
-        // //doesn't work
-        // encoder.encode(data_package.annihilation, scale, temp_plaintext);
-        // evaluator.multiply_plain_inplace(ct1, temp_plaintext);
-        // evaluator.relinearize_inplace(ct1,relin_keys);
-        // evaluator.rescale_to_next_inplace(ct1);
-
-        // //also doesn't work
-        // encoder.encode(data_package.annihilation, scale, temp_plaintext);
-        // encrpytor.encrypt(temp_plaintext, t1);
-        // evaluator.rescale_to_next_inplace(t1);
-        // evaluator.multiply_inplace(ct1,t1);
-        // evaluator.relinearize_inplace(ct1,relin_keys);
-        // evaluator.rescale_to_next_inplace(ct1);      
+        evaluator.mod_switch_to_inplace(temp_plaintext, ct1.parms_id());
+        evaluator.multiply_plain_inplace(ct1, temp_plaintext);
+        evaluator.relinearize_inplace(ct1,relin_keys);
+        evaluator.rescale_to_next_inplace(ct1); 
 
         decryptor.decrypt(ct1, temp_plaintext);
         encoder.decode(temp_plaintext, temp_vector);
@@ -152,6 +138,14 @@ int main(int argc, char *argv[]){
         printresult(temp_vector);
 
         /* STEP 5 */
+        vector<double> temp_vector2;
+        for (double i : temp_vector){
+            temp_vector2.push_back(1/(1+ exp(i)));
+        }
+        encoder.encode(temp_vector2, scale, temp_plaintext);
+        encryptor.encrypt(temp_plaintext, ct1);
+        cout << "\n5. ct1 AFTER STEP 5 (PERFORMED IN PLAINTEXT)" << endl;
+        printresult(temp_vector2);
 
         //calculate 0.81562 * (1/8)^3 * x^2 = 0.00159301 * (x^2)
 
@@ -160,11 +154,6 @@ int main(int argc, char *argv[]){
         //multiply by x
 
         //add with 0.5
-        
-        decryptor.decrypt(ct1, temp_plaintext);
-        encoder.decode(temp_plaintext, temp_vector);
-        cout << "\n5. ct1 AFTER STEP 5 (SKIPPED)" << endl;
-        printresult(temp_vector);
 
         //step 6
         evaluator.mod_switch_to(ctz, ct1.parms_id(), t1);
@@ -188,6 +177,12 @@ int main(int argc, char *argv[]){
         printresult(temp_vector);
 
         //step 8
+        Plaintext lr_coeff;
+        encoder.encode(learning_rate, scale, lr_coeff);
+        evaluator.mod_switch_to_inplace(lr_coeff, ct1.parms_id());
+        evaluator.multiply_plain_inplace(ct1, lr_coeff);
+        evaluator.relinearize_inplace(ct1,relin_keys);
+        evaluator.rescale_to_next_inplace(ct1);
         evaluator.mod_switch_to_inplace(ct0, ct1.parms_id());
         ct1.scale() = scale;
         evaluator.add_inplace(ct0, ct1);
@@ -199,20 +194,40 @@ int main(int argc, char *argv[]){
 
     }
 
+    cout << "The intial parameters were:";
+    printrow(data_package.random, 10);
+    cout << endl;
+    cout << "The final parametrs were:";
+    printrow(temp_vector, 10);
+    cout << endl;
+
     return 0;
 
 }
 
+#pragma region helper functions
+
 void printresult(vector<double>result){
     for (int i=0; i<result.size(); i++){
-        result[i] = round((result[i])*100)/100; //change
+        result[i] = round((result[i])*10000)/10000; //change
     }
     dataTools::print3rows(result,16);
 }
 
 void print_result_full(vector<double>result){
     for (int i=0; i<result.size(); i++){
-        result[i] = round((result[i])*100)/100; //change
+        result[i] = round((result[i])*10000)/10000; //change
     }
     dataTools::print(result);
 }
+
+void printrow(vector<double>result, int cols){
+    for (int i=0; i<result.size(); i++){
+        result[i] = round((result[i])*100)/100; //change
+    }
+    for (int i=0; i<cols; i++){
+        cout << result[i] << " ";
+    }
+}
+
+#pragma endregion

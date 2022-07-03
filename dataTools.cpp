@@ -87,8 +87,8 @@ dataTools::dataTools(char *file, int size, int fields){
     /* SPLIT DATA */
     rows = size;
     cols = fields;
-    train_rows = ceil(rows * 0.01);
-    test_rows = floor(rows * 0.99);
+    train_rows = ceil(rows * 0.04);
+    test_rows = floor(rows * 0.60);
     //cout << rows << " " << train_rows << " " << test_rows << endl;
     int counter = 0;
     for (double i: data){

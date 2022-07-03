@@ -32,3 +32,10 @@ CURRENT STATUS
     - Training implementation is not finished. HE multiplication with plaintext not understood
     - Data tool to test for convergence not written
 
+7/2
+    - Training loop is finished with the exception of step 5, which is in plaintext
+    - Must check for convergence. Will write this implementation first
+    - Need to check for best epoch and learning rate
+    - I observed that by breaking the seal library for the poly_modulus_degree=1024, we can rescale past the levels
+    permitted by the coeff modulus. Mathematically, i don't know what I am doing, but the result looks fine.
+
